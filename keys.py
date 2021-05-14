@@ -1,4 +1,4 @@
-def rege():
+def regex():
     _regex = {
         'google_api': r'AIza[0-9A-Za-z-_]{35}',
         'firebase'  : r'AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}',
