@@ -1,5 +1,5 @@
 def regex():
-    _regex = {
+    regex = {
         'google_api': r'AIza[0-9A-Za-z-_]{35}',
         'firebase'  : r'AAAA[A-Za-z0-9_-]{7}:[A-Za-z0-9_-]{140}',
         'google_captcha' : r'6L[0-9A-Za-z-_]{38}|^6[0-9a-zA-Z_-]{39}$',
@@ -59,4 +59,4 @@ def regex():
         'Picatic_token' : r'sk_live_[0-9a-z]{32}',
         'ams_token' : r'amzn.mws]{8}-[0-9a-f]{4}-10-9a-f1{4}-[0-9a,]{4}-[0-9a-f]{12}'
     }
-    return _regex
+    return regex
