@@ -196,7 +196,7 @@ def parser_input(input):
         items = []
 
         try:
-            items = xml.etree.ElementTree.fromstring(open(args.input,'r').read())
+            items = xml.etree.ElementTree.fromstring(open(input,'r').read())
         except Exception as err:
             print(err)
             sys.exit()
@@ -345,7 +345,8 @@ def send_request(url):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-e","--extract",help="Extract all javascript links located in a page and process it",action="store_true",default=False)
-    parser.add_argument("-i","--input",help="Input a: URL, file or folder",required="True",action="store")
+    parser.add_argument("-i","--input",help="Input a: URL, file or folder",action="store")
+    parser.add_argument("-s","--stdin",help="Read url from stdin",action="store_true")
     parser.add_argument("-o","--output",help="Where to save the file, including file name. Default: output.html",action="store", default="output.html")
     parser.add_argument("-r","--regex",help="RegEx for filtering purposes against found endpoint (e.g: ^/api/)",action="store")
     parser.add_argument("-b","--burp",help="Support burp exported file",action="store_true")
@@ -354,16 +355,14 @@ if __name__ == "__main__":
     parser.add_argument("-n","--only",help="Process js url, if it contain the provided string (string;string2..)",action="store",default="")
     parser.add_argument("-H","--headers",help="Set headers (\"Name:Value\\nName:Value\")",action="store",default="")
     parser.add_argument("-p","--proxy",help="Set proxy (host:port)",action="store",default="")
-    args = parser.parse_args()
-
-    if args.input[-1:] == "/":
-        # /aa/ -> /aa
-        args.input = args.input[:-1]
+    args = parser.parse_args() 
     
-    mode = 1 
+    mode = 1
+
     if args.output == "cli":
         mode = 0
-    # add args
+
+        # add args
     if args.regex:
         # validate regular exp
         try:
@@ -376,49 +375,69 @@ if __name__ == "__main__":
             'custom_regex' : args.regex
         })
 
-    if args.extract:
-        content = send_request(args.input)
-        urls = extractjsurl(content,args.input)
+    def run(inutpr):
+        if inutpr[-1:] == "/":
+            # /aa/ -> /aa
+            inutpr = inutpr[:-1]
+        if args.extract:
+            content = send_request(inutpr)
+            urls = extractjsurl(content,inutpr)
+        else:
+            # convert input to URLs or JS files
+            urls = parser_input(inutpr)
+        # conver URLs to js file
+        output = '' 
+        for url in urls:
+            print('[ + ] URL: '+url)
+            if not args.burp:
+                file = send_request(url)
+            else:
+                file = url.get('js')
+                url = url.get('url')
+            
+            matched = parser_file(file,mode)
+            if args.output == 'cli':
+                cli_output(matched)
+            else:
+                output += '<h1>File: <a href="%s" target="_blank" rel="nofollow noopener noreferrer">%s</a></h1>'%(escape(url),escape(url))
+                for match in matched:
+                    _matched = match.get('matched')
+                    _named = match.get('name')
+                    header = '<div class="text">%s'%(_named.replace('_',' '))
+                    body = ''
+                    # find same thing in multiple context
+                    if match.get('multi_context'):
+                        # remove duplicate
+                        no_dup = []
+                        for context in match.get('context'):
+                            if context not in no_dup:
+                                body += '</a><div class="container">%s</div></div>'%(context)
+                                body = body.replace(
+                                    context,'<span style="background-color:yellow">%s</span>'%context)
+                                no_dup.append(context)
+                            # --
+                    else:
+                        body += '</a><div class="container">%s</div></div>'%(match.get('context')[0] if len(match.get('context'))>1 else match.get('context'))
+                        body = body.replace(
+                            match.get('context')[0] if len(match.get('context')) > 0 else ''.join(match.get('context')),
+                            '<span style="background-color:yellow">%s</span>'%(match.get('context') if len(match.get('context'))>1 else match.get('context'))
+                        )
+                    output += header + body 
+        if args.output != 'cli':
+            html_save(output)
+
+
+    if args.input and args.stdin:
+        print(f'[ERROR]: Not allowed use [-i|--input] and [-s|--stdin] together use only one option\n')
+        parser.print_help()
+        sys.exit()
+    elif args.input:
+        inputs = args.input
+        run(args.input)
+    elif args.stdin:
+        inputs = sys.stdin.readlines()
+        for i in inputs:
+            print(i)
+            run(i.strip('\n'))
     else:
-        # convert input to URLs or JS files
-        urls = parser_input(args.input)
-    # conver URLs to js file
-    output = '' 
-    for url in urls:
-        print('[ + ] URL: '+url)
-        if not args.burp:
-            file = send_request(url)
-        else:
-            file = url.get('js')
-            url = url.get('url')
-        
-        matched = parser_file(file,mode)
-        if args.output == 'cli':
-            cli_output(matched)
-        else:
-            output += '<h1>File: <a href="%s" target="_blank" rel="nofollow noopener noreferrer">%s</a></h1>'%(escape(url),escape(url))
-            for match in matched:
-                _matched = match.get('matched')
-                _named = match.get('name')
-                header = '<div class="text">%s'%(_named.replace('_',' '))
-                body = ''
-                # find same thing in multiple context
-                if match.get('multi_context'):
-                    # remove duplicate
-                    no_dup = []
-                    for context in match.get('context'):
-                        if context not in no_dup:
-                            body += '</a><div class="container">%s</div></div>'%(context)
-                            body = body.replace(
-                                context,'<span style="background-color:yellow">%s</span>'%context)
-                            no_dup.append(context)
-                        # --
-                else:
-                    body += '</a><div class="container">%s</div></div>'%(match.get('context')[0] if len(match.get('context'))>1 else match.get('context'))
-                    body = body.replace(
-                        match.get('context')[0] if len(match.get('context')) > 0 else ''.join(match.get('context')),
-                        '<span style="background-color:yellow">%s</span>'%(match.get('context') if len(match.get('context'))>1 else match.get('context'))
-                    )
-                output += header + body 
-    if args.output != 'cli':
-        html_save(output)
+        parser.print_help()
